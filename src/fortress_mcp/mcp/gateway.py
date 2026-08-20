@@ -23,6 +23,7 @@ from fortress_mcp.risk import (
     ConfirmationService,
     RiskAssessmentRequest,
     RiskClassifier,
+    RiskLevel,
 )
 from fortress_mcp.security.injection import PromptInjectionDetector
 from fortress_mcp.tools.registry import TOOL_PERMISSIONS
@@ -62,20 +63,21 @@ class FortressGateway:
         decision: str,
         reason: str,
         metadata: dict[str, object] | None = None,
-    ) -> None:
-        """Record a redacted security event."""
+    ) -> str:
+        """Record a redacted security event and return its ID."""
         safe_metadata = redact_mapping(metadata or {})
 
-        self._audit.record(
-            AuditEvent(
-                event_type=event_type,
-                agent_id=request.agent_id,
-                tool_name=request.tool_name,
-                decision=decision,
-                reason=reason,
-                metadata=safe_metadata,
-            )
+        event = AuditEvent(
+            event_type=event_type,
+            agent_id=request.agent_id,
+            tool_name=request.tool_name,
+            decision=decision,
+            reason=reason,
+            metadata=safe_metadata,
         )
+
+        self._audit.record(event)
+        return event.event_id
 
     def execute(self, request: ToolRequest) -> ToolResponse:
         """Inspect, authenticate, authorize, assess, confirm, then execute."""
@@ -85,7 +87,7 @@ class FortressGateway:
             injection = self._injection_detector.assess(untrusted_content)
 
             if injection.blocked:
-                self._record(
+                audit_event_id = self._record(
                     event_type=AuditEventType.INJECTION,
                     request=request,
                     decision="deny",
@@ -100,6 +102,9 @@ class FortressGateway:
                     tool_name=request.tool_name,
                     decision="deny",
                     reason=injection.reason,
+                    risk_level=RiskLevel.HIGH,
+                    confirmation_required=False,
+                    audit_event_id=audit_event_id,
                 )
 
         authentication = self._authentication.authenticate(
@@ -111,7 +116,7 @@ class FortressGateway:
         )
 
         if authentication.principal is None:
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.AUTHENTICATION,
                 request=request,
                 decision="unauthenticated",
@@ -123,10 +128,11 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="unauthenticated",
                 reason=authentication.reason,
+                audit_event_id=audit_event_id,
             )
 
         if not self._registry.contains(request.tool_name):
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.AUTHORIZATION,
                 request=request,
                 decision="deny",
@@ -138,12 +144,13 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="deny",
                 reason="Unknown tool.",
+                audit_event_id=audit_event_id,
             )
 
         permission = TOOL_PERMISSIONS.get(request.tool_name)
 
         if permission is None:
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.AUTHORIZATION,
                 request=request,
                 decision="deny",
@@ -155,6 +162,7 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="deny",
                 reason="Tool permission is not registered.",
+                audit_event_id=audit_event_id,
             )
 
         authorization = self._policy.evaluate(
@@ -171,9 +179,8 @@ class FortressGateway:
                 policy_decision=authorization.decision,
             )
         )
-
         if authorization.decision == PolicyDecision.DENY:
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.AUTHORIZATION,
                 request=request,
                 decision=authorization.decision.value,
@@ -185,6 +192,9 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision=authorization.decision.value,
                 reason=authorization.reason,
+                risk_level=risk.risk_level,
+                confirmation_required=risk.requires_confirmation,
+                audit_event_id=audit_event_id,
             )
 
         if risk.requires_confirmation:
@@ -197,11 +207,15 @@ class FortressGateway:
                 )
             )
 
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.CONFIRMATION,
                 request=request,
                 decision=confirmation.decision.value,
                 reason=confirmation.reason,
+                metadata={
+                    "risk_level": risk.risk_level.value,
+                    "confirmation_required": True,
+                },
             )
 
             if confirmation.decision != ConfirmationDecision.APPROVED:
@@ -210,6 +224,9 @@ class FortressGateway:
                     tool_name=request.tool_name,
                     decision="deny",
                     reason=confirmation.reason,
+                    risk_level=risk.risk_level,
+                    confirmation_required=True,
+                    audit_event_id=audit_event_id,
                 )
 
             reauthorization = self._policy.evaluate(
@@ -231,12 +248,15 @@ class FortressGateway:
                         "human confirmation: "
                         f"{reauthorization.reason}"
                     ),
+                    risk_level=risk.risk_level,
+                    confirmation_required=True,
+                    audit_event_id=audit_event_id,
                 )
 
         registered = self._registry.get(request.tool_name)
 
         if registered is None:
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.AUTHORIZATION,
                 request=request,
                 decision="deny",
@@ -248,6 +268,9 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="deny",
                 reason="Tool disappeared from registry.",
+                risk_level=risk.risk_level,
+                confirmation_required=risk.requires_confirmation,
+                audit_event_id=audit_event_id,
             )
 
         _definition, handler = registered
@@ -257,7 +280,7 @@ class FortressGateway:
         except (ValueError, TypeError) as exc:
             reason = str(exc)
 
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.TOOL_FAILURE,
                 request=request,
                 decision="validation_error",
@@ -269,11 +292,14 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="validation_error",
                 reason=reason,
+                risk_level=risk.risk_level,
+                confirmation_required=risk.requires_confirmation,
+                audit_event_id=audit_event_id,
             )
         except RuntimeError as exc:
             reason = str(exc)
 
-            self._record(
+            audit_event_id = self._record(
                 event_type=AuditEventType.TOOL_FAILURE,
                 request=request,
                 decision="execution_error",
@@ -285,13 +311,20 @@ class FortressGateway:
                 tool_name=request.tool_name,
                 decision="execution_error",
                 reason=reason,
+                risk_level=risk.risk_level,
+                confirmation_required=risk.requires_confirmation,
+                audit_event_id=audit_event_id,
             )
 
-        self._record(
+        audit_event_id = self._record(
             event_type=AuditEventType.TOOL_EXECUTION,
             request=request,
             decision=PolicyDecision.ALLOW.value,
             reason="Security checks passed and tool executed.",
+            metadata={
+                "risk_level": risk.risk_level.value,
+                "confirmation_required": risk.requires_confirmation,
+            },
         )
 
         return ToolResponse(
@@ -300,4 +333,7 @@ class FortressGateway:
             result=result,
             decision=PolicyDecision.ALLOW.value,
             reason="Security checks passed and tool executed.",
+            risk_level=risk.risk_level,
+            confirmation_required=risk.requires_confirmation,
+            audit_event_id=audit_event_id,
         )

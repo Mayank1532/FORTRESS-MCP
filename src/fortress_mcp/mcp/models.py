@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from fortress_mcp.risk.models import RiskLevel
+
 
 class ToolRequest(BaseModel):
     """Request entering the FORTRESS MCP gateway."""
@@ -23,3 +25,6 @@ class ToolResponse(BaseModel):
     result: object | None = None
     decision: str
     reason: str
+    risk_level: RiskLevel | None = None
+    confirmation_required: bool = False
+    audit_event_id: str | None = None

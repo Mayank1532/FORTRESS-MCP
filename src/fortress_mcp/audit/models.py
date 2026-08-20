@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +23,11 @@ class AuditEvent(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    event_id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        min_length=1,
+        max_length=64,
+    )
     event_type: AuditEventType
     agent_id: str
     tool_name: str
