@@ -1,0 +1,16 @@
+meta {
+  name: Security Audit
+  type: http
+  seq: 8
+}
+
+get {
+  url: http://127.0.0.1:8000/v1/security/audit?limit=50
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}

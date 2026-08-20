@@ -1,0 +1,29 @@
+meta {
+  name: Invalid Credential Rejection
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://127.0.0.1:8000/v1/security/identity
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "agent_id": "agent-reader",
+    "credential": "wrong-secret",
+    "session_id": "bruno-session"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.authenticated: eq false
+  res.body.role: isNull
+}

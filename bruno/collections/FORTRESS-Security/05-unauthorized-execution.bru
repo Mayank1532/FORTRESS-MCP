@@ -1,0 +1,34 @@
+meta {
+  name: Unauthorized Write Execution
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://127.0.0.1:8000/v1/security/execute
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "agent_id": "agent-reader",
+    "credential": "reader-secret",
+    "session_id": "bruno-session",
+    "tool_name": "update_record",
+    "arguments": {
+      "record_id": "demo",
+      "value": "blocked"
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq false
+  res.body.decision: eq "deny"
+}

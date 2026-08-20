@@ -99,7 +99,7 @@ def test_low_risk_execution_returns_telemetry(monkeypatch) -> None:
     payload = response.json()
 
     assert payload["success"] is True
-    assert payload["status"] == "allow"
+    assert payload["decision"] == "allow"
     assert payload["result"] == 4
     assert payload["risk_level"] == "low"
     assert payload["confirmation_required"] is False
@@ -136,7 +136,7 @@ def test_unauthorized_write_returns_high_risk_denial(monkeypatch) -> None:
     payload = response.json()
 
     assert payload["success"] is False
-    assert payload["status"] == "deny"
+    assert payload["decision"] == "deny"
     assert payload["risk_level"] == "high"
     assert payload["confirmation_required"] is False
     assert payload["audit_event_id"] is not None
@@ -175,7 +175,7 @@ def test_prompt_injection_is_blocked(monkeypatch) -> None:
     payload = response.json()
 
     assert payload["success"] is False
-    assert payload["status"] == "deny"
+    assert payload["decision"] == "deny"
     assert payload["risk_level"] == "high"
     assert payload["audit_event_id"] is not None
 

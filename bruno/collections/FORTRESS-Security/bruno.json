@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "FORTRESS-Security",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

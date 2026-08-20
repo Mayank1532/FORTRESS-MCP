@@ -69,7 +69,7 @@ class SecurityExecuteResponse(BaseModel):
     """Stable HTTP response for a FORTRESS security decision."""
 
     success: bool
-    status: str
+    decision: str
     tool_name: str
     result: object | None = None
     reason: str | None = None
@@ -227,7 +227,7 @@ def security_execute(
 
     return SecurityExecuteResponse(
         success=response.success,
-        status=response.decision,
+        decision=response.decision,
         tool_name=response.tool_name,
         result=response.result,
         reason=response.reason,
