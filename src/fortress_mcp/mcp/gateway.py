@@ -1,5 +1,11 @@
 """FORTRESS security gateway for MCP tool execution."""
 
+from fortress_mcp.audit import (
+    AuditEvent,
+    AuditEventType,
+    AuditRecorder,
+    redact_mapping,
+)
 from fortress_mcp.identity import (
     AuthenticationRequest,
     AuthenticationService,
@@ -18,6 +24,7 @@ from fortress_mcp.risk import (
     RiskAssessmentRequest,
     RiskClassifier,
 )
+from fortress_mcp.security.injection import PromptInjectionDetector
 from fortress_mcp.tools.registry import TOOL_PERMISSIONS
 
 
@@ -31,15 +38,70 @@ class FortressGateway:
         risk: RiskClassifier,
         confirmation: ConfirmationService,
         registry: ToolRegistry,
+        injection_detector: PromptInjectionDetector | None = None,
+        audit_recorder: AuditRecorder | None = None,
     ) -> None:
         self._authentication = authentication
         self._policy = policy
         self._risk = risk
         self._confirmation = confirmation
         self._registry = registry
+        self._injection_detector = injection_detector or PromptInjectionDetector()
+        self._audit = audit_recorder or AuditRecorder()
+
+    @property
+    def audit(self) -> AuditRecorder:
+        """Return the gateway audit recorder."""
+        return self._audit
+
+    def _record(
+        self,
+        *,
+        event_type: AuditEventType,
+        request: ToolRequest,
+        decision: str,
+        reason: str,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        """Record a redacted security event."""
+        safe_metadata = redact_mapping(metadata or {})
+
+        self._audit.record(
+            AuditEvent(
+                event_type=event_type,
+                agent_id=request.agent_id,
+                tool_name=request.tool_name,
+                decision=decision,
+                reason=reason,
+                metadata=safe_metadata,
+            )
+        )
 
     def execute(self, request: ToolRequest) -> ToolResponse:
-        """Authenticate, authorize, assess risk, confirm, then execute."""
+        """Inspect, authenticate, authorize, assess, confirm, then execute."""
+        untrusted_content = request.arguments.get("content")
+
+        if isinstance(untrusted_content, str):
+            injection = self._injection_detector.assess(untrusted_content)
+
+            if injection.blocked:
+                self._record(
+                    event_type=AuditEventType.INJECTION,
+                    request=request,
+                    decision="deny",
+                    reason=injection.reason,
+                    metadata={
+                        "matched_patterns": injection.matched_patterns,
+                    },
+                )
+
+                return ToolResponse(
+                    success=False,
+                    tool_name=request.tool_name,
+                    decision="deny",
+                    reason=injection.reason,
+                )
+
         authentication = self._authentication.authenticate(
             AuthenticationRequest(
                 agent_id=request.agent_id,
@@ -48,6 +110,13 @@ class FortressGateway:
         )
 
         if authentication.principal is None:
+            self._record(
+                event_type=AuditEventType.AUTHENTICATION,
+                request=request,
+                decision="unauthenticated",
+                reason=authentication.reason,
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
@@ -56,6 +125,13 @@ class FortressGateway:
             )
 
         if not self._registry.contains(request.tool_name):
+            self._record(
+                event_type=AuditEventType.AUTHORIZATION,
+                request=request,
+                decision="deny",
+                reason="Unknown tool.",
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
@@ -66,6 +142,13 @@ class FortressGateway:
         permission = TOOL_PERMISSIONS.get(request.tool_name)
 
         if permission is None:
+            self._record(
+                event_type=AuditEventType.AUTHORIZATION,
+                request=request,
+                decision="deny",
+                reason="Tool permission is not registered.",
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
@@ -89,6 +172,13 @@ class FortressGateway:
         )
 
         if authorization.decision == PolicyDecision.DENY:
+            self._record(
+                event_type=AuditEventType.AUTHORIZATION,
+                request=request,
+                decision=authorization.decision.value,
+                reason=authorization.reason,
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
@@ -106,6 +196,13 @@ class FortressGateway:
                 )
             )
 
+            self._record(
+                event_type=AuditEventType.CONFIRMATION,
+                request=request,
+                decision=confirmation.decision.value,
+                reason=confirmation.reason,
+            )
+
             if confirmation.decision != ConfirmationDecision.APPROVED:
                 return ToolResponse(
                     success=False,
@@ -117,6 +214,13 @@ class FortressGateway:
         registered = self._registry.get(request.tool_name)
 
         if registered is None:
+            self._record(
+                event_type=AuditEventType.AUTHORIZATION,
+                request=request,
+                decision="deny",
+                reason="Tool disappeared from registry.",
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
@@ -129,19 +233,44 @@ class FortressGateway:
         try:
             result = handler(request.arguments)
         except (ValueError, TypeError) as exc:
+            reason = str(exc)
+
+            self._record(
+                event_type=AuditEventType.TOOL_FAILURE,
+                request=request,
+                decision="validation_error",
+                reason=reason,
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
                 decision="validation_error",
-                reason=str(exc),
+                reason=reason,
             )
         except RuntimeError as exc:
+            reason = str(exc)
+
+            self._record(
+                event_type=AuditEventType.TOOL_FAILURE,
+                request=request,
+                decision="execution_error",
+                reason=reason,
+            )
+
             return ToolResponse(
                 success=False,
                 tool_name=request.tool_name,
                 decision="execution_error",
-                reason=str(exc),
+                reason=reason,
             )
+
+        self._record(
+            event_type=AuditEventType.TOOL_EXECUTION,
+            request=request,
+            decision=PolicyDecision.ALLOW.value,
+            reason="Security checks passed and tool executed.",
+        )
 
         return ToolResponse(
             success=True,
