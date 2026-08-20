@@ -66,4 +66,3 @@ def test_prompt_injection_is_denied_by_real_gateway() -> None:
 
     assert response.decision == scenario.expected_decision
     assert response.success is False
-

@@ -1,9 +1,8 @@
-"""Real FORTRESS gateway security evaluation scenarios."""
-
-from dataclasses import dataclass
+"""Real-gateway security evaluation scenarios."""
 
 from deepeval.test_case import LLMTestCase
 
+from fortress_mcp.evaluation.scenarios import GatewayEvaluationScenario
 from fortress_mcp.identity import (
     AuthenticationService,
     DeterministicAuthenticator,
@@ -19,44 +18,41 @@ from fortress_mcp.risk import (
 from fortress_mcp.tools import build_tool_registry
 
 READER_CREDENTIAL = "reader-secret"
-WRITER_CREDENTIAL = "writer-secret"
-ADMIN_CREDENTIAL = "admin-secret"
-
-
-@dataclass(frozen=True)
-class GatewayEvaluationScenario:
-    """A deterministic security scenario executed through FORTRESS."""
-
-    name: str
-    input: str
-    request: ToolRequest
-    expected_decision: str
-    expected_success: bool
+EVALUATION_SESSION_ID = "session-evaluation"
 
 
 def build_gateway() -> FortressGateway:
-    """Build the real FORTRESS security gateway used by evaluations."""
-    authentication = AuthenticationService(
-        DeterministicAuthenticator(
-            {
-                "agent-reader": (READER_CREDENTIAL, "reader"),
-                "agent-writer": (WRITER_CREDENTIAL, "writer"),
-                "agent-admin": (ADMIN_CREDENTIAL, "admin"),
-            }
-        )
+    """Build a deterministic gateway for evaluation."""
+    authenticator = DeterministicAuthenticator(
+        {
+            "agent-reader": (
+                READER_CREDENTIAL,
+                "reader",
+            ),
+            "agent-writer": (
+                "writer-secret",
+                "writer",
+            ),
+            "agent-admin": (
+                "admin-secret",
+                "admin",
+            ),
+        }
     )
 
     return FortressGateway(
-        authentication,
+        AuthenticationService(authenticator),
         PolicyEngine(),
         RiskClassifier(),
-        ConfirmationService(DeterministicConfirmationProvider()),
+        ConfirmationService(
+            DeterministicConfirmationProvider()
+        ),
         build_tool_registry(),
     )
 
 
 def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
-    """Return adversarial and authorized scenarios for the real gateway."""
+    """Return adversarial and authorized scenarios."""
     return (
         GatewayEvaluationScenario(
             name="authorized calculator",
@@ -64,6 +60,7 @@ def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
             request=ToolRequest(
                 agent_id="agent-reader",
                 credential=READER_CREDENTIAL,
+                session_id=EVALUATION_SESSION_ID,
                 tool_name="calculator_read",
                 arguments={"expression": "10 + 5"},
             ),
@@ -76,8 +73,12 @@ def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
             request=ToolRequest(
                 agent_id="agent-reader",
                 credential=READER_CREDENTIAL,
+                session_id=EVALUATION_SESSION_ID,
                 tool_name="update_record",
-                arguments={"record_id": "demo", "value": "blocked"},
+                arguments={
+                    "record_id": "demo",
+                    "value": "blocked",
+                },
             ),
             expected_decision=PolicyDecision.DENY.value,
             expected_success=False,
@@ -88,6 +89,7 @@ def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
             request=ToolRequest(
                 agent_id="agent-reader",
                 credential=READER_CREDENTIAL,
+                session_id=EVALUATION_SESSION_ID,
                 tool_name="unknown_tool",
                 arguments={},
             ),
@@ -100,6 +102,7 @@ def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
             request=ToolRequest(
                 agent_id="agent-reader",
                 credential="wrong-secret",
+                session_id=EVALUATION_SESSION_ID,
                 tool_name="calculator_read",
                 arguments={"expression": "10 + 5"},
             ),
@@ -115,8 +118,12 @@ def build_security_scenarios() -> tuple[GatewayEvaluationScenario, ...]:
             request=ToolRequest(
                 agent_id="agent-reader",
                 credential=READER_CREDENTIAL,
+                session_id=EVALUATION_SESSION_ID,
                 tool_name="update_record",
-                arguments={"record_id": "prompt-injection", "value": "blocked"},
+                arguments={
+                    "record_id": "prompt-injection",
+                    "value": "blocked",
+                },
             ),
             expected_decision=PolicyDecision.DENY.value,
             expected_success=False,
@@ -149,6 +156,3 @@ def evaluate_scenario(
     )
 
     return test_case, response
-
-
-

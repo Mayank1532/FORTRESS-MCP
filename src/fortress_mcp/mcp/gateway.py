@@ -106,6 +106,7 @@ class FortressGateway:
             AuthenticationRequest(
                 agent_id=request.agent_id,
                 credential=request.credential,
+                session_id=request.session_id,
             )
         )
 
@@ -209,6 +210,27 @@ class FortressGateway:
                     tool_name=request.tool_name,
                     decision="deny",
                     reason=confirmation.reason,
+                )
+
+            reauthorization = self._policy.evaluate(
+                AuthorizationRequest(
+                    principal=authentication.principal,
+                    tool_name=request.tool_name,
+                    permission=permission,
+                ),
+                confirmation_granted=True,
+            )
+
+            if reauthorization.decision != PolicyDecision.ALLOW:
+                return ToolResponse(
+                    success=False,
+                    tool_name=request.tool_name,
+                    decision=reauthorization.decision.value,
+                    reason=(
+                        "Authorization re-evaluation failed after "
+                        "human confirmation: "
+                        f"{reauthorization.reason}"
+                    ),
                 )
 
         registered = self._registry.get(request.tool_name)

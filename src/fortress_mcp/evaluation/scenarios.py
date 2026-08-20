@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from fortress_mcp.mcp.models import ToolRequest
+
 
 @dataclass(frozen=True)
 class SecurityScenario:
@@ -10,6 +12,17 @@ class SecurityScenario:
     name: str
     input: str
     expected_output: str
+
+
+@dataclass(frozen=True)
+class GatewayEvaluationScenario:
+    """A deterministic scenario executed through the real gateway."""
+
+    name: str
+    input: str
+    request: ToolRequest
+    expected_decision: str
+    expected_success: bool
 
 
 SECURITY_SCENARIOS: tuple[SecurityScenario, ...] = (

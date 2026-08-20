@@ -28,7 +28,8 @@ def test_valid_credentials_authenticate_agent() -> None:
     result = service.authenticate(
         AuthenticationRequest(
             agent_id="agent-demo",
-            credential="demo-secret",
+credential="demo-secret",
+            session_id="session-test",
         )
     )
 
@@ -36,6 +37,7 @@ def test_valid_credentials_authenticate_agent() -> None:
     assert result.principal == AgentIdentity(
         agent_id="agent-demo",
         role="reader",
+        session_id="session-test",
     )
 
 
@@ -46,7 +48,8 @@ def test_invalid_credentials_are_rejected() -> None:
     result = service.authenticate(
         AuthenticationRequest(
             agent_id="agent-demo",
-            credential="wrong-secret",
+credential="wrong-secret",
+            session_id="session-test",
         )
     )
 
@@ -62,7 +65,8 @@ def test_unknown_agent_is_rejected() -> None:
     result = service.authenticate(
         AuthenticationRequest(
             agent_id="unknown-agent",
-            credential="anything",
+credential="anything",
+            session_id="session-test",
         )
     )
 
@@ -80,6 +84,7 @@ def test_authenticator_is_replaceable() -> None:
             return AgentIdentity(
                 agent_id=request.agent_id,
                 role="stub",
+        session_id="session-test",
             )
 
     service = AuthenticationService(StubAuthenticator())
@@ -87,7 +92,8 @@ def test_authenticator_is_replaceable() -> None:
     result = service.authenticate(
         AuthenticationRequest(
             agent_id="test-agent",
-            credential="test",
+credential="test",
+            session_id="session-test",
         )
     )
 

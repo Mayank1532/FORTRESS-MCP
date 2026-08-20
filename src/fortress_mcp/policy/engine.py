@@ -27,6 +27,7 @@ class PolicyEngine:
     def evaluate(
         self,
         request: AuthorizationRequest,
+        confirmation_granted: bool = False,
     ) -> AuthorizationResult:
         """Evaluate an authorization request using default-deny semantics."""
         policy = self._tool_policies.get(request.tool_name)
@@ -55,7 +56,7 @@ class PolicyEngine:
                 required_permission=policy.permission,
             )
 
-        if policy.requires_confirmation:
+        if policy.requires_confirmation and not confirmation_granted:
             return AuthorizationResult(
                 decision=PolicyDecision.REQUIRE_CONFIRMATION,
                 reason="Tool requires explicit human confirmation.",

@@ -47,4 +47,5 @@ class DeterministicAuthenticator:
         return AgentIdentity(
             agent_id=request.agent_id,
             role=role,
+            session_id=request.session_id,
         )

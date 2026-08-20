@@ -10,6 +10,7 @@ class ToolRequest(BaseModel):
 
     agent_id: str = Field(min_length=1, max_length=128)
     credential: str = Field(min_length=1, max_length=256)
+    session_id: str = Field(min_length=1, max_length=128)
     tool_name: str = Field(min_length=1, max_length=128)
     arguments: dict[str, object] = Field(default_factory=dict)
 

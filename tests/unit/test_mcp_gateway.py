@@ -65,7 +65,8 @@ def test_reader_can_execute_calculator() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-reader",
-            credential="reader-secret",
+credential="reader-secret",
+            session_id="session-test",
             tool_name="calculator_read",
             arguments={"expression": "2 + 3 * 4"},
         )
@@ -83,7 +84,8 @@ def test_invalid_credentials_never_execute_tool() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-reader",
-            credential="wrong-secret",
+credential="wrong-secret",
+            session_id="session-test",
             tool_name="calculator_read",
             arguments={"expression": "2 + 2"},
         )
@@ -100,7 +102,8 @@ def test_unknown_tool_is_denied() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-admin",
-            credential="admin-secret",
+credential="admin-secret",
+            session_id="session-test",
             tool_name="unknown_tool",
             arguments={},
         )
@@ -117,7 +120,8 @@ def test_reader_cannot_execute_update() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-reader",
-            credential="reader-secret",
+credential="reader-secret",
+            session_id="session-test",
             tool_name="update_record",
             arguments={
                 "record_id": "demo-1",
@@ -137,7 +141,8 @@ def test_writer_update_requires_confirmation() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-writer",
-            credential="writer-secret",
+credential="writer-secret",
+            session_id="session-test",
             tool_name="update_record",
             arguments={
                 "record_id": "demo-1",
@@ -161,7 +166,8 @@ def test_writer_update_executes_after_confirmation() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-writer",
-            credential="writer-secret",
+credential="writer-secret",
+            session_id="session-test",
             tool_name="update_record",
             arguments={
                 "record_id": "demo-1",
@@ -185,7 +191,8 @@ def test_sensitive_action_requires_confirmation() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-admin",
-            credential="admin-secret",
+credential="admin-secret",
+            session_id="session-test",
             tool_name="sensitive_action",
             arguments={"action": "rotate-demo-secret"},
         )
@@ -206,7 +213,8 @@ def test_sensitive_action_can_execute_after_approval() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-admin",
-            credential="admin-secret",
+credential="admin-secret",
+            session_id="session-test",
             tool_name="sensitive_action",
             arguments={"action": "rotate-demo-secret"},
         )
@@ -227,7 +235,8 @@ def test_invalid_calculator_arguments_are_blocked() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-reader",
-            credential="reader-secret",
+credential="reader-secret",
+            session_id="session-test",
             tool_name="calculator_read",
             arguments={
                 "expression": "__import__('os').system('whoami')",
@@ -246,7 +255,8 @@ def test_invalid_weather_coordinates_are_blocked() -> None:
     response = gateway.execute(
         ToolRequest(
             agent_id="agent-reader",
-            credential="reader-secret",
+credential="reader-secret",
+            session_id="session-test",
             tool_name="weather_lookup",
             arguments={
                 "latitude": 100,

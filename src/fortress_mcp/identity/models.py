@@ -13,12 +13,13 @@ class AuthenticationStatus(StrEnum):
 
 
 class AgentIdentity(BaseModel):
-    """Represents the identity presented by an AI agent."""
+    """Represents the authenticated identity of an AI agent."""
 
     model_config = ConfigDict(frozen=True)
 
     agent_id: str = Field(min_length=1, max_length=128)
     role: str = Field(min_length=1, max_length=64)
+    session_id: str = Field(min_length=1, max_length=128)
 
 
 class AuthenticationRequest(BaseModel):
@@ -26,6 +27,7 @@ class AuthenticationRequest(BaseModel):
 
     agent_id: str = Field(min_length=1, max_length=128)
     credential: str = Field(min_length=1, max_length=256)
+    session_id: str = Field(min_length=1, max_length=128)
 
 
 class AuthenticationResult(BaseModel):

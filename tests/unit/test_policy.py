@@ -14,6 +14,7 @@ def principal(agent_id: str = "agent-demo", role: str = "reader") -> AgentIdenti
     return AgentIdentity(
         agent_id=agent_id,
         role=role,
+        session_id="session-test",
     )
 
 
@@ -70,6 +71,7 @@ def test_writer_requires_confirmation_for_update() -> None:
     result = engine.evaluate(
         AuthorizationRequest(
             principal=principal(role="writer"),
+                    session_id="session-test",
             tool_name="update_record",
             permission=Permission.WRITE,
         )
@@ -86,6 +88,7 @@ def test_admin_reaches_sensitive_confirmation_boundary() -> None:
     result = engine.evaluate(
         AuthorizationRequest(
             principal=principal(role="admin"),
+        session_id="session-test",
             tool_name="sensitive_action",
             permission=Permission.SENSITIVE,
         )
